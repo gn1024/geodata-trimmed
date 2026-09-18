@@ -1,0 +1,72 @@
+name: build-geodata
+
+# Сборка идёт в ночь на воскресенье по UTC, чтобы свежий релиз уже лежал
+# к моменту, когда rule_update.lua на роутере просыпается в 05:00.
+on:
+  schedule:
+    - cron: "0 21 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  UPSTREAM: https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Скачать исходные базы
+        run: |
+          curl -sSL --retry 3 --retry-delay 5 -o upstream-geosite.dat "$UPSTREAM/geosite.dat"
+          curl -sSL --retry 3 --retry-delay 5 -o upstream-geoip.dat "$UPSTREAM/geoip.dat"
+
+      - name: Обрезать до нужных категорий
+        run: |
+          mkdir -p dist
+          python3 trim-geodata.py upstream-geosite.dat dist/geosite.dat --sha256 --strict \
+            $(grep -vE '^\s*(#|$)' categories/geosite.txt)
+          python3 trim-geodata.py upstream-geoip.dat dist/geoip.dat --sha256 --strict \
+            $(grep -vE '^\s*(#|$)' categories/geoip.txt)
+
+      - name: Сравнить с уже опубликованным
+        id: diff
+        run: |
+          base="https://github.com/${{ github.repository }}/releases/latest/download"
+          changed=0
+          for name in geosite geoip; do
+            published=$(curl -sfL "$base/$name.dat.sha256sum" | awk '{print $1}' || true)
+            built=$(awk '{print $1}' "dist/$name.dat.sha256sum")
+            [ "$published" = "$built" ] || changed=1
+          done
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+      - name: Отчёт
+        run: |
+          {
+            echo "| файл | исходник | результат |"
+            echo "|---|---|---|"
+            for name in geosite geoip; do
+              awk -v n="$name" \
+                  -v src="$(stat -c%s "upstream-$name.dat")" \
+                  -v out="$(stat -c%s "dist/$name.dat")" \
+                  'BEGIN { printf "| %s.dat | %.2f МБ | %.2f МБ |\n", n, src/1e6, out/1e6 }'
+            done
+            echo
+            echo "Публикация: ${{ steps.diff.outputs.changed == '1' && 'да, содержимое изменилось' || 'пропущена, содержимое прежнее' }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Опубликовать релиз
+        if: steps.diff.outputs.changed == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(date -u +%Y%m%d%H%M)
+          gh release create "$tag" dist/geosite.dat dist/geosite.dat.sha256sum \
+            dist/geoip.dat dist/geoip.dat.sha256sum \
+            --title "$tag" \
+            --notes "Обрезано из runetfreedom/russia-v2ray-rules-dat до категорий, перечисленных в categories/."
