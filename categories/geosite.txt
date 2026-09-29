@@ -1,12 +1,20 @@
 # Категории geosite, используемые правилами PassWall2.
 # Список должен совпадать с тем, что встречается в конфиге как geosite:<имя>.
 alibaba
+anthropic
 category-ads-all
+deepseek
 discord
 facebook
+groq
 instagram
+manus
 openai
+perplexity
+poe
 ru-blocked
 telegram
 whatsapp
+windsurf
+xai
 youtube
