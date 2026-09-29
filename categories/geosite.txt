@@ -5,15 +5,10 @@ anthropic
 category-ads-all
 discord
 facebook
-groq
 instagram
-manus
 openai
-perplexity
-poe
 ru-blocked
 telegram
 whatsapp
-windsurf
 xai
 youtube
