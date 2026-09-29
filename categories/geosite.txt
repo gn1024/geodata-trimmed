@@ -3,7 +3,6 @@
 alibaba
 anthropic
 category-ads-all
-deepseek
 discord
 facebook
 groq
